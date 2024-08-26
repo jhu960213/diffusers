@@ -1060,15 +1060,18 @@ def main(args):
     )
     
     # Get current rank of distributed training
-    current_rank = accelerator.process_index
+    current_rank = accelerator.local_process_index
+    
+    # Get profiler type
+    profiler_type = args.profile
     
     # Init profilers
-    if args.profile == f'rpd':
+    if profiler_type == f'rpd':
         logger.info(f'INIT RPD-TRACER')
         rpd_profile = rpdTracerControl()
         prof = torch.autograd.profiler.emit_nvtx(record_shapes=True)
         
-    if args.profile == f'torch':
+    if profiler_type == f'torch':
         logger.info(f'INIT TORCH-PROFILER')
         trace_output_name = None
         if args.profile_epoch is None and args.profile_rank is not None:
@@ -1084,21 +1087,20 @@ def main(args):
                                                            torch.profiler.ProfilerActivity.CUDA], 
                                                on_trace_ready=trace_handler)
         
-    # Start profilers
-    if args.profile == f'torch' and args.profile_epoch is None and args.profile_rank == current_rank:
+    if profiler_type == f'torch' and args.profile_epoch is None and args.profile_rank == current_rank:
         logger.info(f'STARTING TORCH PROFILER FOR RANK-{args.profile_rank}\'s ALL EPOCHS')
         torch_profile.start()
         
-    if args.profile == f'rpd' and args.profile_epoch is None and args.profile_rank == current_rank:
+    if profiler_type == f'rpd' and args.profile_epoch is None and args.profile_rank == current_rank:
         logger.info(f'STARTING RPD TRACER FOR RANK-{args.profile_rank}\'s ALL EPOCHS')
         rpd_profile.start()
         prof.__enter__()
     
-    if args.profile == f'torch' and args.profile_epoch is None and args.profile_rank is None:
+    if profiler_type == f'torch' and args.profile_epoch is None and args.profile_rank is None:
         logger.info(f'STARTING TORCH PROFILER FOR ALL RANKS & ALL EPOCHS')
         torch_profile.start()
         
-    if args.profile == f'rpd' and args.profile_epoch is None and args.profile_rank is None:
+    if profiler_type == f'rpd' and args.profile_epoch is None and args.profile_rank is None:
         logger.info(f'STARTING RPD TRACER FOR ALL RANKS & ALL EPOCHS')
         rpd_profile.start()
         prof.__enter__()
@@ -1106,20 +1108,20 @@ def main(args):
     for epoch in range(first_epoch, args.num_train_epochs):
         train_loss = 0.0
         
-        if args.profile == f'torch' and args.profile_epoch == epoch and args.profile_rank is None:
+        if profiler_type == f'torch' and args.profile_epoch == epoch and args.profile_rank is None:
             logger.info(f'STARTING TORCH TRACER FOR ALL RANKS\' EPOCH-{args.profile_epoch}')
             torch_profile.start()
         
-        if args.profile == f'rpd' and args.profile_epoch == epoch and args.profile_rank is None:
+        if profiler_type == f'rpd' and args.profile_epoch == epoch and args.profile_rank is None:
             logger.info(f'STARTING RPD TRACER FOR ALL RANKS\' EPOCH-{args.profile_epoch}')
             rpd_profile.start()
             prof.__enter__()
         
-        if args.profile == f'torch' and args.profile_epoch == epoch and args.profile_rank == current_rank:
+        if profiler_type == f'torch' and args.profile_epoch == epoch and args.profile_rank == current_rank:
             logger.info(f'STARTING TORCH PROFILER FOR RANK-{args.profile_rank}\'s EPOCH-{args.profile_epoch}')
             torch_profile.start()
         
-        if args.profile == f'rpd' and args.profile_epoch == epoch and args.profile_rank == current_rank:
+        if profiler_type == f'rpd' and args.profile_epoch == epoch and args.profile_rank == current_rank:
             logger.info(f'STARTING RPD TRACER FOR RANK-{args.profile_rank}\'s EPOCH-{args.profile_epoch}')
             rpd_profile.start()
             prof.__enter__()
@@ -1270,20 +1272,20 @@ def main(args):
             if global_step >= args.max_train_steps:
                 break
         
-        if args.profile == f'torch' and args.profile_epoch == epoch and args.profile_rank is None:
-            logger.info(f'STOPPING TORCH TRACER FOR ALL RANKS\' EPOCH-{args.profile_epoch}')
+        if profiler_type == f'torch' and args.profile_epoch == epoch and args.profile_rank is None:
+            logger.info(f'STOPPING TORCH PROFILER FOR ALL RANKS\' EPOCH-{args.profile_epoch}')
             torch_profile.stop()
         
-        if args.profile == f'rpd' and args.profile_epoch == epoch and args.profile_rank is None:
+        if profiler_type == f'rpd' and args.profile_epoch == epoch and args.profile_rank is None:
             logger.info(f'STOPPING RPD TRACER FOR ALL RANKS\' EPOCH-{args.profile_epoch}')
             prof.__exit__(None, None, None)
             rpd_profile.stop()
         
-        if args.profile == f'torch' and args.profile_epoch == epoch and args.profile_rank == current_rank:
+        if profiler_type == f'torch' and args.profile_epoch == epoch and args.profile_rank == current_rank:
             logger.info(f'STOPPING TORCH PROFILER FOR RANK-{args.profile_rank}\'s EPOCH-{args.profile_epoch}')
             torch_profile.stop()
         
-        if args.profile == f'rpd' and args.profile_epoch == epoch and args.profile_rank == current_rank:
+        if profiler_type == f'rpd' and args.profile_epoch == epoch and args.profile_rank == current_rank:
             logger.info(f'STOPPING RPD TRACER FOR RANK-{args.profile_rank}\'s EPOCH-{args.profile_epoch}')
             prof.__exit__(None, None, None)
             rpd_profile.stop()
@@ -1352,21 +1354,20 @@ def main(args):
                     # Switch back to the original UNet parameters.
                     ema_unet.restore(unet.parameters())
     
-    # Stop profilers
-    if args.profile == f'torch' and args.profile_epoch is None and args.profile_rank == current_rank:
+    if profiler_type == f'torch' and args.profile_epoch is None and args.profile_rank == current_rank:
         logger.info(f'STOPPING TORCH PROFILER FOR RANK-{args.profile_rank}\'s ALL EPOCHS')
         torch_profile.stop()
         
-    if args.profile == f'rpd' and args.profile_epoch is None and args.profile_rank == current_rank:
+    if profiler_type == f'rpd' and args.profile_epoch is None and args.profile_rank == current_rank:
         logger.info(f'STOPPING RPD TRACER FOR RANK-{args.profile_rank}\'s ALL EPOCHS')
         prof.__exit__(None, None, None)
         rpd_profile.stop()
         
-    if args.profile == f'torch' and args.profile_epoch is None and args.profile_rank is None:
+    if profiler_type == f'torch' and args.profile_epoch is None and args.profile_rank is None:
         logger.info(f'STOPPING TORCH PROFILER FOR ALL RANKS & ALL EPOCHS')
         torch_profile.stop()
         
-    if args.profile == f'rpd' and args.profile_epoch is None and args.profile_rank is None:
+    if profiler_type == f'rpd' and args.profile_epoch is None and args.profile_rank is None:
         logger.info(f'STOPPING RPD TRACER FOR ALL RANKS & ALL EPOCHS')
         prof.__exit__(None, None, None)
         rpd_profile.stop()
